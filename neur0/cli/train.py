@@ -74,7 +74,9 @@ def main() -> None:
     opt = AdamW(params, lr=args.lr, weight_decay=float(args.wd))
     loss_fn = MSELoss()
     steps_per_epoch = int(np.ceil(Xtr.shape[0] / args.batch_size))
-    sched = CosineWarmup(base_lr=args.lr, warmup_steps=max(1, steps_per_epoch), total_steps=max(1, args.epochs * steps_per_epoch))
+    total_steps = max(1, args.epochs * steps_per_epoch)
+    warmup_steps = min(max(1, total_steps // 10), max(1, steps_per_epoch), max(1, total_steps - 1))
+    sched = CosineWarmup(base_lr=args.lr, warmup_steps=warmup_steps, total_steps=total_steps)
 
     def save_ckpt(path: str, epoch: int, step: int, best_val: float):
         data = {}

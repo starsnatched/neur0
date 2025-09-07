@@ -19,3 +19,6 @@ addopts = "-q"
 [project.scripts]
 train = "neur0.cli.train:main"
 infer = "neur0.cli.infer:main"
+
+[tool.uv]
+package = true
