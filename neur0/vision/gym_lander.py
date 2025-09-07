@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Tuple
 import numpy as np
+from ..rl.reward import RewardShaperConfig, LunarRewardShaper, discounted_returns, rwr_weights
 
 
 def make_env(env_id: str = "LunarLanderContinuous-v3", seed: int | None = None):
@@ -32,19 +33,34 @@ def heuristic_action(obs: np.ndarray) -> np.ndarray:
 class EpisodeData:
     X: np.ndarray
     Y: np.ndarray
+    W: np.ndarray | None = None
 
 
-def collect_episodes(episodes: int, seq_len: int, encoder, context_factory, topk: int = 5, seed: int = 0, max_steps: int = 512, env_id: str = "LunarLanderContinuous-v3") -> EpisodeData:
+def collect_episodes(
+    episodes: int,
+    seq_len: int,
+    encoder,
+    context_factory,
+    topk: int = 5,
+    seed: int = 0,
+    max_steps: int = 512,
+    env_id: str = "LunarLanderContinuous-v3",
+    gamma: float = 0.99,
+    rwr_beta: float = 0.0,
+    reward_cfg: RewardShaperConfig | None = None,
+) -> EpisodeData:
     rng = np.random.default_rng(seed)
     X_list: List[np.ndarray] = []
     Y_list: List[np.ndarray] = []
+    W_list: List[float] = []
     env = make_env(env_id, seed)
+    shaper = LunarRewardShaper(reward_cfg)
     for ep in range(episodes):
         obs, info = env.reset(seed=seed + ep)
         ctx = context_factory()
-        frames = []
         feats = []
         actions = []
+        rewards = []
         for t in range(max_steps):
             frame = env.render()
             if frame is None:
@@ -55,19 +71,29 @@ def collect_episodes(episodes: int, seq_len: int, encoder, context_factory, topk
             feats.append(z)
             actions.append(a)
             obs, reward, terminated, truncated, info = env.step(a)
+            shaped = shaper.shape(obs.astype(np.float32), a.astype(np.float32), float(reward))
+            rewards.append(shaped)
             if terminated or truncated:
                 break
         if len(feats) < seq_len:
             continue
         F = np.stack(feats, axis=0).astype(np.float32)
         A = np.stack(actions, axis=0).astype(np.float32)
+        R = np.array(rewards, dtype=np.float32)
+        G = discounted_returns(R, gamma=gamma)
         for start in range(0, len(feats) - seq_len):
+            t = start + seq_len - 1
             X_list.append(F[start:start + seq_len])
-            Y_list.append(A[start + seq_len - 1])
+            Y_list.append(A[t])
+            W_list.append(G[t])
     env.close()
     if not X_list:
         raise RuntimeError("no data collected; increase episodes or max_steps")
     X = np.stack(X_list, axis=0)
     Y = np.stack(Y_list, axis=0)
-    return EpisodeData(X=X, Y=Y)
-
+    W = np.array(W_list, dtype=np.float32)
+    if rwr_beta > 0.0:
+        W = rwr_weights(W, beta=float(rwr_beta))
+    else:
+        W = np.ones_like(W)
+    return EpisodeData(X=X, Y=Y, W=W)
