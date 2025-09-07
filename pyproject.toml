@@ -1,0 +1,21 @@
+[project]
+name = "neur0"
+version = "0.1.0"
+description = "Neural Network in NumPy."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=1.26",
+    "gymnasium[box2d]>=0.29",
+    "onnxruntime>=1.17",
+    "opencv-python>=4.9"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[project.scripts]
+train = "neur0.cli.train:main"
+infer = "neur0.cli.infer:main"
