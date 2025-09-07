@@ -33,6 +33,7 @@ uv.lock
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+AGENTS.md
 
 # Installer logs
 pip-log.txt
